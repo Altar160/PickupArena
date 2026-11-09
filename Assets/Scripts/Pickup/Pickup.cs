@@ -8,20 +8,25 @@ public abstract class Pickup : NetworkBehaviour
     private void OnTriggerEnter(Collider other)
     {
         // Seul le serveur gère les ramassages.
-        if (!IsServer || !IsSpawned || isCollected)
+        if (!IsSpawned || !IsServer || isCollected)
             return;
 
-        // Vérifier que l'objet touché est un joueur.
+        // Les pickups fonctionnent uniquement pendant Playing.
+        if (GameManager.Instance == null ||
+            GameManager.Instance.State.Value != GamePhase.Playing)
+            return;
+
+        // Identifier le joueur.
         NetworkObject player =
             other.GetComponentInParent<NetworkObject>();
 
         if (player == null || !player.IsPlayerObject)
             return;
 
-        // Empêcher un double ramassage.
+        // Éviter les doubles ramassages.
         isCollected = true;
 
-        // Appliquer l'effet spécifique au pickup.
+        // Appliquer l'effet spécifique.
         ApplyEffect(player);
 
         // Supprimer le pickup pour tous les joueurs.

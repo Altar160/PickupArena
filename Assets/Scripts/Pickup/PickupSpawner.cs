@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
@@ -16,54 +15,71 @@ public class PickupSpawner : NetworkBehaviour
     [SerializeField] private Transform[] pickupSpawnPoints;
 
     private readonly List<NetworkObject> activePickups = new();
-    private Coroutine spawnRoutine;
 
-    public override void OnNetworkSpawn()
+    private float nextSpawnTime;
+    private bool wasPlaying;
+
+    private void Update()
     {
-        if (!IsServer) return;
+        // Seul le serveur gère les pickups.
+        if (!IsSpawned || !IsServer)
+            return;
 
-        spawnRoutine = StartCoroutine(SpawnLoop());
-    }
+        bool isPlaying =
+            GameManager.Instance != null &&
+            GameManager.Instance.IsSpawned &&
+            GameManager.Instance.State.Value == GamePhase.Playing;
 
-    private IEnumerator SpawnLoop()
-    {
-        while (IsSpawned && IsServer)
+        // En dehors d'une manche, supprimer les pickups.
+        if (!isPlaying)
         {
-            if (settings != null)
-            {
-                // Retirer les pickups qui ont été ramassés.
-                activePickups.RemoveAll(
-                    pickup => pickup == null || !pickup.IsSpawned
-                );
+            if (wasPlaying)
+                ClearPickups();
 
-                if (activePickups.Count < settings.maxActivePickups)
-                {
-                    SpawnRandomPickup();
-                }
-            }
-
-            float interval = settings != null
-                ? Mathf.Max(0.2f, settings.pickupSpawnInterval)
-                : 3f;
-
-            yield return new WaitForSeconds(interval);
+            wasPlaying = false;
+            return;
         }
+
+        // Début de la manche.
+        if (!wasPlaying)
+        {
+            wasPlaying = true;
+            nextSpawnTime = Time.time;
+        }
+
+        if (settings == null)
+            return;
+
+        if (Time.time < nextSpawnTime)
+            return;
+
+        nextSpawnTime = Time.time +
+            Mathf.Max(0.2f, settings.pickupSpawnInterval);
+
+        // Nettoyer les références des pickups ramassés.
+        activePickups.RemoveAll(
+            pickup => pickup == null || !pickup.IsSpawned
+        );
+
+        if (activePickups.Count < settings.maxActivePickups)
+            SpawnRandomPickup();
     }
 
     private void SpawnRandomPickup()
     {
-        if (pickupPrefabs == null || pickupPrefabs.Length == 0)
+        if (pickupPrefabs == null ||
+            pickupPrefabs.Length == 0 ||
+            pickupSpawnPoints == null ||
+            pickupSpawnPoints.Length == 0)
             return;
 
-        if (pickupSpawnPoints == null || pickupSpawnPoints.Length == 0)
-            return;
-
-        // Chercher les positions libres.
+        // Rechercher les positions disponibles.
         List<Transform> availablePoints = new();
 
         foreach (Transform point in pickupSpawnPoints)
         {
-            if (point == null) continue;
+            if (point == null)
+                continue;
 
             bool occupied = false;
 
@@ -87,40 +103,56 @@ public class PickupSpawner : NetworkBehaviour
         if (availablePoints.Count == 0)
             return;
 
-        // Choisir un emplacement aléatoire.
+        // Choisir une position.
         Transform spawnPoint = availablePoints[
             Random.Range(0, availablePoints.Count)
         ];
 
-        // Choisir un type de pickup aléatoire.
-        NetworkObject selectedPrefab = pickupPrefabs[
-            Random.Range(0, pickupPrefabs.Length)
-        ];
+        // Chercher les prefabs valides.
+        List<NetworkObject> validPrefabs = new();
 
-        if (selectedPrefab == null)
+        foreach (NetworkObject prefab in pickupPrefabs)
+        {
+            if (prefab != null)
+                validPrefabs.Add(prefab);
+        }
+
+        if (validPrefabs.Count == 0)
             return;
 
-        // Créer le pickup côté serveur.
+        // Choisir un pickup aléatoire.
+        NetworkObject selectedPrefab = validPrefabs[
+            Random.Range(0, validPrefabs.Count)
+        ];
+
         NetworkObject pickupInstance = Instantiate(
             selectedPrefab,
             spawnPoint.position,
             spawnPoint.rotation
         );
 
-        // Le faire apparaître chez tous les joueurs.
+        // Créer le pickup chez tous les joueurs.
         pickupInstance.Spawn();
 
         activePickups.Add(pickupInstance);
     }
 
-    public override void OnNetworkDespawn()
+    private void ClearPickups()
     {
-        if (spawnRoutine != null)
+        foreach (NetworkObject pickup in activePickups)
         {
-            StopCoroutine(spawnRoutine);
-            spawnRoutine = null;
+            if (pickup != null && pickup.IsSpawned)
+                pickup.Despawn(true);
         }
 
         activePickups.Clear();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (IsServer)
+            ClearPickups();
+
+        wasPlaying = false;
     }
 }

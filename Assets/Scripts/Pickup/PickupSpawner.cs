@@ -8,15 +8,18 @@ public class PickupSpawner : NetworkBehaviour
 {
     [Header("Configuration")]
     [SerializeField] private PickupArenaSettings settings;
-    [SerializeField] private NetworkObject coinPrefab;
+
+    [Header("Pickup Prefabs")]
+    [SerializeField] private NetworkObject[] pickupPrefabs;
+
+    [Header("Spawn Positions")]
     [SerializeField] private Transform[] pickupSpawnPoints;
 
-    private readonly List<NetworkObject> activeCoins = new();
+    private readonly List<NetworkObject> activePickups = new();
     private Coroutine spawnRoutine;
 
     public override void OnNetworkSpawn()
     {
-        // Seul le serveur génère les pièces.
         if (!IsServer) return;
 
         spawnRoutine = StartCoroutine(SpawnLoop());
@@ -26,32 +29,36 @@ public class PickupSpawner : NetworkBehaviour
     {
         while (IsSpawned && IsServer)
         {
-            if (settings != null && coinPrefab != null)
+            if (settings != null)
             {
-                // Retirer les pièces déjà ramassées.
-                activeCoins.RemoveAll(
-                    coin => coin == null || !coin.IsSpawned
+                // Retirer les pickups qui ont été ramassés.
+                activePickups.RemoveAll(
+                    pickup => pickup == null || !pickup.IsSpawned
                 );
 
-                if (activeCoins.Count < settings.maxActiveCoins)
+                if (activePickups.Count < settings.maxActivePickups)
                 {
-                    SpawnCoin();
+                    SpawnRandomPickup();
                 }
             }
 
             float interval = settings != null
-                ? Mathf.Max(0.2f, settings.coinSpawnInterval)
+                ? Mathf.Max(0.2f, settings.pickupSpawnInterval)
                 : 3f;
 
             yield return new WaitForSeconds(interval);
         }
     }
 
-    private void SpawnCoin()
+    private void SpawnRandomPickup()
     {
-        if (pickupSpawnPoints == null) return;
+        if (pickupPrefabs == null || pickupPrefabs.Length == 0)
+            return;
 
-        // Trouver les emplacements libres.
+        if (pickupSpawnPoints == null || pickupSpawnPoints.Length == 0)
+            return;
+
+        // Chercher les positions libres.
         List<Transform> availablePoints = new();
 
         foreach (Transform point in pickupSpawnPoints)
@@ -60,11 +67,11 @@ public class PickupSpawner : NetworkBehaviour
 
             bool occupied = false;
 
-            foreach (NetworkObject coin in activeCoins)
+            foreach (NetworkObject pickup in activePickups)
             {
-                if (coin != null &&
+                if (pickup != null &&
                     Vector3.Distance(
-                        coin.transform.position,
+                        pickup.transform.position,
                         point.position
                     ) < 0.75f)
                 {
@@ -77,23 +84,33 @@ public class PickupSpawner : NetworkBehaviour
                 availablePoints.Add(point);
         }
 
-        if (availablePoints.Count == 0) return;
+        if (availablePoints.Count == 0)
+            return;
 
         // Choisir un emplacement aléatoire.
-        int index = Random.Range(0, availablePoints.Count);
-        Transform spawnPoint = availablePoints[index];
+        Transform spawnPoint = availablePoints[
+            Random.Range(0, availablePoints.Count)
+        ];
 
-        // Créer la pièce sur le serveur.
-        NetworkObject coinInstance = Instantiate(
-            coinPrefab,
+        // Choisir un type de pickup aléatoire.
+        NetworkObject selectedPrefab = pickupPrefabs[
+            Random.Range(0, pickupPrefabs.Length)
+        ];
+
+        if (selectedPrefab == null)
+            return;
+
+        // Créer le pickup côté serveur.
+        NetworkObject pickupInstance = Instantiate(
+            selectedPrefab,
             spawnPoint.position,
             spawnPoint.rotation
         );
 
-        // Synchroniser son apparition.
-        coinInstance.Spawn();
+        // Le faire apparaître chez tous les joueurs.
+        pickupInstance.Spawn();
 
-        activeCoins.Add(coinInstance);
+        activePickups.Add(pickupInstance);
     }
 
     public override void OnNetworkDespawn()
@@ -104,6 +121,6 @@ public class PickupSpawner : NetworkBehaviour
             spawnRoutine = null;
         }
 
-        activeCoins.Clear();
+        activePickups.Clear();
     }
 }

@@ -7,6 +7,13 @@ using UnityEngine.Serialization;
 )]
 public class PickupArenaSettings : ScriptableObject
 {
+    [Header("Match Settings")]
+    [Min(1)]
+    public int countdownDuration = 3;
+
+    [Min(1)]
+    public int matchDuration = 90;
+
     [Header("Coin Settings")]
     [Min(1)]
     public int coinPoints = 1;
@@ -25,9 +32,9 @@ public class PickupArenaSettings : ScriptableObject
     [Header("Pickup Spawn Settings")]
     [FormerlySerializedAs("coinSpawnInterval")]
     [Min(0.2f)]
-    public float pickupSpawnInterval = 3f;
+    public float pickupSpawnInterval = 1.5f;
 
     [FormerlySerializedAs("maxActiveCoins")]
     [Min(1)]
-    public int maxActivePickups = 3;
+    public int maxActivePickups = 10;
 }

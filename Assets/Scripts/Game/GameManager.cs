@@ -12,13 +12,13 @@ public enum GamePhase
 [RequireComponent(typeof(NetworkObject))]
 public class GameManager : NetworkBehaviour
 {
-    [Header("Game Settings")]
-    [SerializeField] private int countdownDuration = 3;
-    [SerializeField] private int matchDuration = 90;
+    [Header("Game Configuration")]
+    [SerializeField]
+    private PickupArenaSettings settings;
 
     public static GameManager Instance { get; private set; }
 
-    // Etat du jeu synchronisé.
+    // État du jeu synchronisé.
     public readonly NetworkVariable<GamePhase> State =
         new NetworkVariable<GamePhase>(
             GamePhase.Lobby,
@@ -45,8 +45,6 @@ public class GameManager : NetworkBehaviour
     {
         State.OnValueChanged += OnStateChanged;
         RemainingSeconds.OnValueChanged += OnTimerChanged;
-
-        Debug.Log($"Etat actuel : {State.Value}");
     }
 
     private void Update()
@@ -58,7 +56,6 @@ public class GameManager : NetworkBehaviour
             State.Value != GamePhase.Playing)
             return;
 
-        // Calculer le temps restant.
         float remaining = phaseEndTime - Time.time;
 
         int seconds = Mathf.Max(
@@ -72,63 +69,67 @@ public class GameManager : NetworkBehaviour
         if (remaining > 0f)
             return;
 
-        // Passer automatiquement à l'état suivant.
         if (State.Value == GamePhase.Countdown)
-        {
             StartPlaying();
-        }
         else if (State.Value == GamePhase.Playing)
-        {
             EndGame();
-        }
     }
 
-    // Pour lancer temporairement depuis l'Inspector.
     [ContextMenu("Start Match (Host Only)")]
     public void StartMatch()
     {
-        if (!Application.isPlaying || !IsSpawned || !IsServer)
+        if (!Application.isPlaying ||
+            !IsSpawned ||
+            !IsServer ||
+            State.Value != GamePhase.Lobby)
             return;
 
-        if (State.Value != GamePhase.Lobby)
+        if (settings == null)
+        {
+            Debug.LogError("GameSettings non assigné !");
             return;
+        }
 
+        int duration = Mathf.Max(
+            1, settings.countdownDuration
+        );
+
+        phaseEndTime = Time.time + duration;
+        RemainingSeconds.Value = duration;
         State.Value = GamePhase.Countdown;
-        RemainingSeconds.Value = countdownDuration;
 
-        phaseEndTime = Time.time + countdownDuration;
-
-        Debug.Log("Début du compte à rebours !");
+        Debug.Log("Début du Countdown !");
     }
 
     private void StartPlaying()
     {
+        int duration = Mathf.Max(
+            1, settings.matchDuration
+        );
+
+        phaseEndTime = Time.time + duration;
+        RemainingSeconds.Value = duration;
         State.Value = GamePhase.Playing;
-        RemainingSeconds.Value = matchDuration;
 
-        phaseEndTime = Time.time + matchDuration;
-
-        Debug.Log("LA PARTIE COMMENCE !");
+        Debug.Log("Début de la partie !");
     }
 
     private void EndGame()
     {
-        State.Value = GamePhase.GameOver;
         RemainingSeconds.Value = 0;
+        State.Value = GamePhase.GameOver;
 
-        Debug.Log("FIN DE LA PARTIE !");
+        Debug.Log("Fin de la partie !");
     }
 
     private void OnStateChanged(
         GamePhase previous,
         GamePhase current)
     {
-        Debug.Log($"Etat : {previous} -> {current}");
+        Debug.Log($"État : {previous} -> {current}");
     }
 
-    private void OnTimerChanged(
-        int previous,
-        int current)
+    private void OnTimerChanged(int previous, int current)
     {
         Debug.Log($"Temps restant : {current}");
     }

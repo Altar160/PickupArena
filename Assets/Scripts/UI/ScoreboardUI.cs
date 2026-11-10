@@ -17,9 +17,11 @@ public class ScoreboardUI : MonoBehaviour
         PlayerScore.PlayerDespawned += UnregisterPlayer;
 
         if (scoresText != null)
-            scoresText.richText = false;
+        {
+            // IMPORTANT : autoriser les balises de couleur TMP.
+            scoresText.richText = true;
+        }
 
-        // Retrouver les joueurs déjà présents.
         PlayerScore[] existingPlayers =
             FindObjectsByType<PlayerScore>(
                 FindObjectsSortMode.None
@@ -47,16 +49,18 @@ public class ScoreboardUI : MonoBehaviour
                 return;
 
             if (oldPlayer != null)
-            {
-                oldPlayer.ScoreChanged -= OnScoreChanged;
-                oldPlayer.NicknameChanged -= OnNicknameChanged;
-            }
+                UnsubscribePlayer(oldPlayer);
         }
 
         players[clientId] = player;
 
         player.ScoreChanged += OnScoreChanged;
         player.NicknameChanged += OnNicknameChanged;
+
+        PlayerColor color = player.GetComponent<PlayerColor>();
+
+        if (color != null)
+            color.ColorChanged += OnColorChanged;
 
         RefreshUI();
     }
@@ -66,8 +70,7 @@ public class ScoreboardUI : MonoBehaviour
         if (player == null)
             return;
 
-        player.ScoreChanged -= OnScoreChanged;
-        player.NicknameChanged -= OnNicknameChanged;
+        UnsubscribePlayer(player);
 
         ulong clientId = player.OwnerClientId;
 
@@ -81,12 +84,28 @@ public class ScoreboardUI : MonoBehaviour
         RefreshUI();
     }
 
+    private void UnsubscribePlayer(PlayerScore player)
+    {
+        player.ScoreChanged -= OnScoreChanged;
+        player.NicknameChanged -= OnNicknameChanged;
+
+        PlayerColor color = player.GetComponent<PlayerColor>();
+
+        if (color != null)
+            color.ColorChanged -= OnColorChanged;
+    }
+
     private void OnScoreChanged(PlayerScore player)
     {
         RefreshUI();
     }
 
     private void OnNicknameChanged(PlayerScore player)
+    {
+        RefreshUI();
+    }
+
+    private void OnColorChanged()
     {
         RefreshUI();
     }
@@ -103,7 +122,7 @@ public class ScoreboardUI : MonoBehaviour
             player => player == null || !player.IsSpawned
         );
 
-        // Trier par score décroissant.
+        // Meilleur score en premier.
         ranking.Sort((a, b) =>
         {
             int result =
@@ -126,30 +145,49 @@ public class ScoreboardUI : MonoBehaviour
         {
             PlayerScore player = ranking[i];
 
-            // Utiliser le vrai pseudo.
             string nickname = player.Nickname.Value.ToString();
 
-            // Nom de secours si le pseudo n'est pas reçu.
             if (string.IsNullOrWhiteSpace(nickname))
+                nickname = $"Joueur {player.OwnerClientId + 1}";
+
+            // Éviter que le pseudo soit interprété
+            // comme une balise TextMeshPro.
+            nickname = nickname
+                .Replace("<", "‹")
+                .Replace(">", "›");
+
+            PlayerColor playerColor =
+                player.GetComponent<PlayerColor>();
+
+            string coloredNickname = nickname;
+
+            if (playerColor != null)
             {
-                nickname =
-                    $"Joueur {player.OwnerClientId + 1}";
+                string htmlColor = PlayerColor.GetHtmlColor(
+                    playerColor.ColorIndex.Value
+                );
+
+                coloredNickname =
+                    $"<color={htmlColor}>{nickname}</color>";
             }
+
+            display.Append($"{i + 1}. ");
+            display.Append(coloredNickname);
 
             if (player.OwnerClientId ==
                 NetworkManager.ServerClientId)
             {
-                nickname += " (Host)";
+                display.Append(" (Host)");
             }
 
             if (manager != null &&
                 player.OwnerClientId == manager.LocalClientId)
             {
-                nickname += " (vous)";
+                display.Append(" (vous)");
             }
 
             display.AppendLine(
-                $"{i + 1}. {nickname} : {player.Score.Value} pts"
+                $" : {player.Score.Value} pts"
             );
         }
 
@@ -164,10 +202,7 @@ public class ScoreboardUI : MonoBehaviour
         foreach (PlayerScore player in players.Values)
         {
             if (player != null)
-            {
-                player.ScoreChanged -= OnScoreChanged;
-                player.NicknameChanged -= OnNicknameChanged;
-            }
+                UnsubscribePlayer(player);
         }
 
         players.Clear();

@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
@@ -17,6 +18,9 @@ public class GameOverUI : NetworkBehaviour
     [Header("Client Buttons")]
     [SerializeField] private Button clientLeaveButton;
 
+    [Header("Match Settings")]
+    [SerializeField, Min(2)] private int minPlayers = 2;
+
     private GameManager gameManager;
     private bool actionInProgress;
 
@@ -28,6 +32,9 @@ public class GameOverUI : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         gameManager.State.OnValueChanged += OnStateChanged;
+
+        NetworkManager.OnClientDisconnectCallback +=
+            OnClientDisconnected;
 
         if (replayButton != null)
             replayButton.onClick.AddListener(Replay);
@@ -46,11 +53,27 @@ public class GameOverUI : NetworkBehaviour
         RefreshUI(gameManager.State.Value);
     }
 
+    private void OnClientDisconnected(ulong clientId)
+    {
+        if (!IsSpawned || !IsHost)
+            return;
+
+        // Actualiser le bouton lorsqu'un joueur quitte.
+        RefreshUI(gameManager.State.Value);
+    }
+
     private void OnStateChanged(
         GamePhase previous,
         GamePhase current)
     {
         RefreshUI(current);
+    }
+
+    private bool HasEnoughPlayers()
+    {
+        return NetworkManager != null &&
+               NetworkManager.IsServer &&
+               NetworkManager.ConnectedClientsIds.Count >= minPlayers;
     }
 
     private void RefreshUI(GamePhase phase)
@@ -60,11 +83,18 @@ public class GameOverUI : NetworkBehaviour
         if (gameOverPanel != null)
             gameOverPanel.SetActive(isGameOver);
 
-        // Boutons réservés au Host.
         bool showHostButtons = isGameOver && IsHost;
 
         if (replayButton != null)
+        {
             replayButton.gameObject.SetActive(showHostButtons);
+
+            // Désactiver REJOUER si le Host est seul.
+            replayButton.interactable =
+                showHostButtons &&
+                HasEnoughPlayers() &&
+                !actionInProgress;
+        }
 
         if (returnLobbyButton != null)
             returnLobbyButton.gameObject.SetActive(showHostButtons);
@@ -72,7 +102,6 @@ public class GameOverUI : NetworkBehaviour
         if (returnMenuButton != null)
             returnMenuButton.gameObject.SetActive(showHostButtons);
 
-        // Bouton réservé aux Clients.
         bool showClientButton =
             isGameOver && IsClient && !IsHost;
 
@@ -88,16 +117,25 @@ public class GameOverUI : NetworkBehaviour
                gameManager.State.Value == GamePhase.GameOver;
     }
 
-    // REJOUER : recharger l'arène.
     public void Replay()
     {
         if (!CanUseHostButtons())
             return;
 
+        // Vérifier aussi côté logique, pas seulement sur l'UI.
+        if (!HasEnoughPlayers())
+        {
+            Debug.LogWarning(
+                "Impossible de rejouer : minimum 2 joueurs."
+            );
+
+            RefreshUI(gameManager.State.Value);
+            return;
+        }
+
         LoadNetworkScene("GameScene");
     }
 
-    // RETOUR LOBBY : conserver la session.
     public void ReturnToLobby()
     {
         if (!CanUseHostButtons())
@@ -121,26 +159,19 @@ public class GameOverUI : NetworkBehaviour
         }
         else
         {
-            Debug.LogError(
-                $"Erreur de chargement : {result}"
-            );
+            Debug.LogError($"Erreur de chargement : {result}");
         }
     }
 
-    // Le Host ferme la session pour tout le monde.
     public void ReturnToMenu()
     {
         if (!CanUseHostButtons())
             return;
 
         actionInProgress = true;
-
-        Debug.Log("Le Host ferme la session.");
-
         NetworkManager.Shutdown();
     }
 
-    // NOUVEAU : un Client quitte seul.
     public void LeaveGame()
     {
         if (!IsSpawned ||
@@ -148,21 +179,21 @@ public class GameOverUI : NetworkBehaviour
             IsHost ||
             actionInProgress ||
             gameManager.State.Value != GamePhase.GameOver)
-        {
             return;
-        }
 
         actionInProgress = true;
-
-        Debug.Log("Le Client quitte la partie.");
-
-        // Déconnecter uniquement ce Client.
         NetworkManager.Shutdown();
     }
 
     public override void OnNetworkDespawn()
     {
         gameManager.State.OnValueChanged -= OnStateChanged;
+
+        if (NetworkManager != null)
+        {
+            NetworkManager.OnClientDisconnectCallback -=
+                OnClientDisconnected;
+        }
 
         if (replayButton != null)
             replayButton.onClick.RemoveListener(Replay);

@@ -18,7 +18,6 @@ public class GameSceneSpawnManager : NetworkBehaviour
     {
         if (!IsServer) return;
 
-        // Attendre que tous les joueurs aient chargé la scène.
         NetworkManager.SceneManager.OnLoadEventCompleted
             += OnSceneLoaded;
     }
@@ -32,7 +31,6 @@ public class GameSceneSpawnManager : NetworkBehaviour
         if (!IsServer || gameStarted)
             return;
 
-        // On ne s'intéresse qu'à GameScene.
         if (sceneName != "GameScene")
             return;
 
@@ -50,7 +48,7 @@ public class GameSceneSpawnManager : NetworkBehaviour
             return;
         }
 
-        // Récupérer les positions valides.
+        // Récupérer les points d'apparition valides.
         List<Transform> availableSpawns = new();
 
         foreach (Transform point in spawnPoints)
@@ -59,24 +57,26 @@ public class GameSceneSpawnManager : NetworkBehaviour
                 availableSpawns.Add(point);
         }
 
-        int playerCount =
-            NetworkManager.ConnectedClientsIds.Count;
+        // Trier les identifiants pour attribuer les couleurs
+        // dans un ordre constant, en commençant par le Host.
+        List<ulong> clientIds =
+            new List<ulong>(NetworkManager.ConnectedClientsIds);
 
-        if (availableSpawns.Count < playerCount)
+        clientIds.Sort();
+
+        if (availableSpawns.Count < clientIds.Count)
         {
-            Debug.LogError(
-                "Pas assez de SpawnPoints pour les joueurs !"
-            );
+            Debug.LogError("Pas assez de SpawnPoints !");
             return;
         }
 
-        // Vérifier que tous les joueurs sont prêts.
-        foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+        // Vérifier que tous les joueurs ont chargé la scène.
+        foreach (ulong clientId in clientIds)
         {
             if (!clientsCompleted.Contains(clientId))
             {
                 Debug.LogWarning(
-                    $"Joueur {clientId} pas encore prêt."
+                    $"Le joueur {clientId} n'est pas prêt."
                 );
                 return;
             }
@@ -84,10 +84,11 @@ public class GameSceneSpawnManager : NetworkBehaviour
 
         gameStarted = true;
 
-        // Créer les personnages.
-        foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+        // Créer et configurer chaque personnage.
+        for (int i = 0; i < clientIds.Count; i++)
         {
-            // Éviter de créer deux capsules au même joueur.
+            ulong clientId = clientIds[i];
+
             if (NetworkManager.SpawnManager
                 .GetPlayerNetworkObject(clientId) != null)
                 continue;
@@ -98,7 +99,6 @@ public class GameSceneSpawnManager : NetworkBehaviour
             Transform spawnPoint =
                 availableSpawns[randomIndex];
 
-            // Retirer ce point pour éviter les doublons.
             availableSpawns.RemoveAt(randomIndex);
 
             NetworkObject player = Instantiate(
@@ -107,17 +107,29 @@ public class GameSceneSpawnManager : NetworkBehaviour
                 spawnPoint.rotation
             );
 
-            // Attribuer cette capsule au joueur.
             player.SpawnAsPlayerObject(clientId, true);
 
+            // NOUVEAU : attribuer la couleur du joueur.
+            PlayerColor playerColor =
+                player.GetComponent<PlayerColor>();
+
+            if (playerColor != null)
+            {
+                playerColor.SetColorIndex(i);
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "Le prefab Player n'a pas de PlayerColor !"
+                );
+            }
+
             Debug.Log(
-                $"Joueur {clientId} apparu à " +
-                $"{spawnPoint.position}"
+                $"Joueur {clientId} apparu au SpawnPoint " +
+                $"{spawnPoint.name}, couleur {i + 1}"
             );
         }
 
-        // Tous les personnages sont créés.
-        // Le serveur peut commencer le compte à rebours.
         if (GameManager.Instance != null)
         {
             GameManager.Instance.StartMatch();

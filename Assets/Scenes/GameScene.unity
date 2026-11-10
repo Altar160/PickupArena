@@ -2451,8 +2451,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   ShowTopMostFoldoutHeaderGroup: 1
-  countdownDuration: 3
-  matchDuration: 15
+  settings: {fileID: 11400000, guid: af80353d7fcfe7746a0b0dbcfc158f3e, type: 2}
 --- !u!114 &1595622576
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2505,6 +2504,7 @@ MonoBehaviour:
   returnLobbyButton: {fileID: 1529848116}
   returnMenuButton: {fileID: 1327787183}
   clientLeaveButton: {fileID: 2061501441}
+  minPlayers: 2
 --- !u!1 &1697100776
 GameObject:
   m_ObjectHideFlags: 0

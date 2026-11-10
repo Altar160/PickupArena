@@ -3458,6 +3458,7 @@ MonoBehaviour:
   - {fileID: 7821190777824651338, guid: 2366d8767b047a14e8ddb0690be2d191, type: 3}
   - {fileID: 7821190777824651338, guid: d3695ddd35179e346a1ab1dd1d822ce4, type: 3}
   - {fileID: 7821190777824651338, guid: 8db43fa9f000caa479d122372a3e0659, type: 3}
+  rainbowPickupPrefab: {fileID: 7821190777824651338, guid: 0bec221a94743a54bb7ca8128f2b3f64, type: 3}
   pickupSpawnPoints:
   - {fileID: 72029032}
   - {fileID: 1190376174}

@@ -37,4 +37,19 @@ public class PickupArenaSettings : ScriptableObject
     [FormerlySerializedAs("maxActiveCoins")]
     [Min(1)]
     public int maxActivePickups = 10;
+    [Header("Rainbow Pickup Settings")]
+    [Min(1)]
+    public int rainbowPoints = 5;
+
+    [Min(1f)]
+    public float rainbowSpeedBoostMultiplier = 2f;
+
+    [Min(0.1f)]
+    public float rainbowSpeedBoostDuration = 5f;
+
+    [Min(0.1f)]
+    public float rainbowFreezeDuration = 2f;
+
+    [Range(0f, 1f)]
+    public float rainbowPickupChance = 0.1f;
 }

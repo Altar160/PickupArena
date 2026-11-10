@@ -13,10 +13,15 @@ MonoBehaviour:
   m_Name: GameSettings
   m_EditorClassIdentifier: Assembly-CSharp::PickupArenaSettings
   countdownDuration: 3
-  matchDuration: 10
+  matchDuration: 90
   coinPoints: 10
   speedBoostMultiplier: 1.5
   speedBoostDuration: 5
   freezeDuration: 3
   pickupSpawnInterval: 1.5
   maxActivePickups: 10
+  rainbowPoints: 20
+  rainbowSpeedBoostMultiplier: 2
+  rainbowSpeedBoostDuration: 5
+  rainbowFreezeDuration: 2
+  rainbowPickupChance: 0.1

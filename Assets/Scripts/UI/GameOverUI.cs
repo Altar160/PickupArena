@@ -14,6 +14,9 @@ public class GameOverUI : NetworkBehaviour
     [SerializeField] private Button returnLobbyButton;
     [SerializeField] private Button returnMenuButton;
 
+    [Header("Client Buttons")]
+    [SerializeField] private Button clientLeaveButton;
+
     private GameManager gameManager;
     private bool actionInProgress;
 
@@ -35,6 +38,9 @@ public class GameOverUI : NetworkBehaviour
         if (returnMenuButton != null)
             returnMenuButton.onClick.AddListener(ReturnToMenu);
 
+        if (clientLeaveButton != null)
+            clientLeaveButton.onClick.AddListener(LeaveGame);
+
         actionInProgress = false;
 
         RefreshUI(gameManager.State.Value);
@@ -54,20 +60,27 @@ public class GameOverUI : NetworkBehaviour
         if (gameOverPanel != null)
             gameOverPanel.SetActive(isGameOver);
 
-        // Seul le Host voit les boutons.
-        bool showButtons = IsHost && isGameOver;
+        // Boutons réservés au Host.
+        bool showHostButtons = isGameOver && IsHost;
 
         if (replayButton != null)
-            replayButton.gameObject.SetActive(showButtons);
+            replayButton.gameObject.SetActive(showHostButtons);
 
         if (returnLobbyButton != null)
-            returnLobbyButton.gameObject.SetActive(showButtons);
+            returnLobbyButton.gameObject.SetActive(showHostButtons);
 
         if (returnMenuButton != null)
-            returnMenuButton.gameObject.SetActive(showButtons);
+            returnMenuButton.gameObject.SetActive(showHostButtons);
+
+        // Bouton réservé aux Clients.
+        bool showClientButton =
+            isGameOver && IsClient && !IsHost;
+
+        if (clientLeaveButton != null)
+            clientLeaveButton.gameObject.SetActive(showClientButton);
     }
 
-    private bool CanUseButtons()
+    private bool CanUseHostButtons()
     {
         return IsSpawned &&
                IsHost &&
@@ -75,25 +88,24 @@ public class GameOverUI : NetworkBehaviour
                gameManager.State.Value == GamePhase.GameOver;
     }
 
-    // REJOUER : nouvelle manche dans la même arène.
+    // REJOUER : recharger l'arène.
     public void Replay()
     {
-        if (!CanUseButtons())
+        if (!CanUseHostButtons())
             return;
 
         LoadNetworkScene("GameScene");
     }
 
-    // RETOUR LOBBY : garder les joueurs connectés.
+    // RETOUR LOBBY : conserver la session.
     public void ReturnToLobby()
     {
-        if (!CanUseButtons())
+        if (!CanUseHostButtons())
             return;
 
         LoadNetworkScene("Lobby");
     }
 
-    // Charger une scène chez tous les joueurs.
     private void LoadNetworkScene(string sceneName)
     {
         SceneEventProgressStatus result =
@@ -110,21 +122,41 @@ public class GameOverUI : NetworkBehaviour
         else
         {
             Debug.LogError(
-                $"Erreur de chargement de {sceneName} : {result}"
+                $"Erreur de chargement : {result}"
             );
         }
     }
 
-    // RETOUR MENU : fermer la session.
+    // Le Host ferme la session pour tout le monde.
     public void ReturnToMenu()
     {
-        if (!CanUseButtons())
+        if (!CanUseHostButtons())
             return;
 
         actionInProgress = true;
 
-        // Déconnecter tous les joueurs.
-        // Un autre script gérera le retour au menu local.
+        Debug.Log("Le Host ferme la session.");
+
+        NetworkManager.Shutdown();
+    }
+
+    // NOUVEAU : un Client quitte seul.
+    public void LeaveGame()
+    {
+        if (!IsSpawned ||
+            !IsClient ||
+            IsHost ||
+            actionInProgress ||
+            gameManager.State.Value != GamePhase.GameOver)
+        {
+            return;
+        }
+
+        actionInProgress = true;
+
+        Debug.Log("Le Client quitte la partie.");
+
+        // Déconnecter uniquement ce Client.
         NetworkManager.Shutdown();
     }
 
@@ -140,5 +172,8 @@ public class GameOverUI : NetworkBehaviour
 
         if (returnMenuButton != null)
             returnMenuButton.onClick.RemoveListener(ReturnToMenu);
+
+        if (clientLeaveButton != null)
+            clientLeaveButton.onClick.RemoveListener(LeaveGame);
     }
 }

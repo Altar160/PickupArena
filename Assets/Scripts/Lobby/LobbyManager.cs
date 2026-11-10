@@ -7,7 +7,6 @@ using Unity.Netcode;
 using TMPro;
 using UnityEngine.UI;
 
-// Informations synchronisées d'un joueur du Lobby.
 public struct LobbyPlayerData :
     INetworkSerializable, IEquatable<LobbyPlayerData>
 {
@@ -35,12 +34,14 @@ public class LobbyManager : NetworkBehaviour
     [Header("Lobby UI")]
     [SerializeField] private TMP_Text playersListText;
     [SerializeField] private Button startGameButton;
+    [SerializeField] private Button leaveLobbyButton;
 
     [Header("Lobby Settings")]
     [SerializeField] private int minPlayers = 2;
     [SerializeField] private int maxPlayers = 4;
 
     private NetworkList<LobbyPlayerData> players;
+    private bool isLeaving = false;
 
     private void Awake()
     {
@@ -59,7 +60,6 @@ public class LobbyManager : NetworkBehaviour
             NetworkManager.OnClientDisconnectCallback +=
                 OnClientDisconnected;
 
-            // Récupérer les joueurs déjà connectés.
             foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
             {
                 AddPlayer(clientId);
@@ -68,6 +68,9 @@ public class LobbyManager : NetworkBehaviour
 
         if (startGameButton != null)
             startGameButton.onClick.AddListener(StartGame);
+
+        if (leaveLobbyButton != null)
+            leaveLobbyButton.onClick.AddListener(LeaveLobby);
 
         RefreshUI();
     }
@@ -98,8 +101,6 @@ public class LobbyManager : NetworkBehaviour
             ClientId = clientId,
             Nickname = new FixedString64Bytes(nickname)
         });
-
-        Debug.Log($"{nickname} rejoint le Lobby.");
     }
 
     private void OnClientDisconnected(ulong clientId)
@@ -155,14 +156,22 @@ public class LobbyManager : NetworkBehaviour
 
             startGameButton.interactable =
                 IsHost &&
+                !isLeaving &&
                 players.Count >= minPlayers &&
                 players.Count <= maxPlayers;
+        }
+
+        // Le bouton Quitter est disponible pour tous.
+        if (leaveLobbyButton != null)
+        {
+            leaveLobbyButton.gameObject.SetActive(true);
+            leaveLobbyButton.interactable = !isLeaving;
         }
     }
 
     public void StartGame()
     {
-        if (!IsHost)
+        if (!IsHost || isLeaving)
             return;
 
         if (players.Count < minPlayers ||
@@ -183,6 +192,25 @@ public class LobbyManager : NetworkBehaviour
         }
     }
 
+    // NOUVEAU : quitter le Lobby.
+    public void LeaveLobby()
+    {
+        if (!IsSpawned || isLeaving)
+            return;
+
+        isLeaving = true;
+
+        Debug.Log(
+            IsHost
+                ? "Le Host ferme le Lobby."
+                : "Le Client quitte le Lobby."
+        );
+
+        // Host : ferme toute la session.
+        // Client : déconnecte uniquement ce Client.
+        NetworkManager.Shutdown();
+    }
+
     public override void OnNetworkDespawn()
     {
         players.OnListChanged -= OnPlayersChanged;
@@ -198,6 +226,9 @@ public class LobbyManager : NetworkBehaviour
 
         if (startGameButton != null)
             startGameButton.onClick.RemoveListener(StartGame);
+
+        if (leaveLobbyButton != null)
+            leaveLobbyButton.onClick.RemoveListener(LeaveLobby);
     }
 
     private void OnDestroy()

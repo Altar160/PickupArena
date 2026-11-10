@@ -1,14 +1,19 @@
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Unity.Netcode;
 
 [RequireComponent(typeof(NetworkManager))]
 public class SessionConnectionApproval : MonoBehaviour
 {
+    [Header("Session Settings")]
+    [SerializeField, Range(2, 4)]
+    private int maxPlayers = 4;
+
     private NetworkManager networkManager;
 
-    // Pseudos conservés par le serveur pendant la session.
+    // Pseudos enregistrés côté serveur.
     private readonly Dictionary<ulong, string> playerNames = new();
 
     private void Awake()
@@ -26,11 +31,45 @@ public class SessionConnectionApproval : MonoBehaviour
         NetworkManager.ConnectionApprovalRequest request,
         NetworkManager.ConnectionApprovalResponse response)
     {
+        // Vérifier si une partie est déjà en cours.
+        string currentScene = SceneManager.GetActiveScene().name;
+
+        if (currentScene != "MainMenu" &&
+            currentScene != "Lobby")
+        {
+            RejectConnection(
+                response,
+                "La partie a déjà commencé."
+            );
+            return;
+        }
+
+        // Refuser les connexions si le Lobby est plein.
+        if (networkManager.ConnectedClientsIds.Count >= maxPlayers)
+        {
+            RejectConnection(
+                response,
+                "Le Lobby est complet."
+            );
+            return;
+        }
+
+        // Limiter la taille des données reçues.
+        if (request.Payload != null &&
+            request.Payload.Length > 128)
+        {
+            RejectConnection(
+                response,
+                "Données de connexion invalides."
+            );
+            return;
+        }
+
         ulong clientId = request.ClientNetworkId;
 
+        // Récupérer le pseudo envoyé.
         string nickname = "";
 
-        // Récupérer le pseudo envoyé par le client.
         if (request.Payload != null &&
             request.Payload.Length > 0)
         {
@@ -39,7 +78,6 @@ public class SessionConnectionApproval : MonoBehaviour
             );
         }
 
-        // Nettoyer et sauvegarder le pseudo.
         nickname = CleanNickname(
             nickname,
             $"Joueur {clientId + 1}"
@@ -47,24 +85,32 @@ public class SessionConnectionApproval : MonoBehaviour
 
         playerNames[clientId] = nickname;
 
-        // Accepter la connexion sans créer de capsule.
+        // Accepter sans créer de capsule dans le Lobby.
         response.Approved = true;
         response.CreatePlayerObject = false;
         response.Pending = false;
 
-        Debug.Log(
-            $"{nickname} connecté (ID : {clientId})"
-        );
+        Debug.Log($"{nickname} a rejoint la session.");
     }
 
-    // Enregistrer explicitement le pseudo du Host.
+    private void RejectConnection(
+        NetworkManager.ConnectionApprovalResponse response,
+        string reason)
+    {
+        response.Approved = false;
+        response.CreatePlayerObject = false;
+        response.Reason = reason;
+        response.Pending = false;
+
+        Debug.LogWarning($"Connexion refusée : {reason}");
+    }
+
     public void SetHostName(string nickname)
     {
         playerNames[NetworkManager.ServerClientId] =
             CleanNickname(nickname, "Host");
     }
 
-    // Permettre aux autres scripts de récupérer un pseudo.
     public string GetPlayerName(ulong clientId)
     {
         if (playerNames.TryGetValue(clientId, out string name))
@@ -87,6 +133,15 @@ public class SessionConnectionApproval : MonoBehaviour
         if (nickname.Length > 16)
             nickname = nickname.Substring(0, 16);
 
+        // Respecter la capacité du FixedString64Bytes.
+        while (Encoding.UTF8.GetByteCount(nickname) > 60)
+        {
+            nickname = nickname.Substring(
+                0,
+                nickname.Length - 1
+            );
+        }
+
         return string.IsNullOrWhiteSpace(nickname)
             ? fallback
             : nickname;
@@ -94,8 +149,12 @@ public class SessionConnectionApproval : MonoBehaviour
 
     private void OnClientDisconnected(ulong clientId)
     {
-        if (networkManager.IsServer)
-            playerNames.Remove(clientId);
+        if (!networkManager.IsServer)
+            return;
+
+        playerNames.Remove(clientId);
+
+        Debug.Log($"Joueur {clientId} déconnecté.");
     }
 
     private void OnDestroy()

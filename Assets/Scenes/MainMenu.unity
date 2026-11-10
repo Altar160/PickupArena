@@ -2258,6 +2258,7 @@ GameObject:
   - component: {fileID: 1498140060}
   - component: {fileID: 1498140059}
   - component: {fileID: 1498140062}
+  - component: {fileID: 1498140063}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -2365,6 +2366,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 196df071c8ae82f4d898c1066c0ca359, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SessionConnectionApproval
+--- !u!114 &1498140063
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1498140058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f6c1c311c018fe4ea870f07500ea408, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ReturnToMenuOnDisconnect
 --- !u!1 &1697496879
 GameObject:
   m_ObjectHideFlags: 0

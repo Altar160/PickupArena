@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 4542233503226748121}
   - component: {fileID: 1366413067490969846}
   - component: {fileID: -3305240047304978328}
+  - component: {fileID: -1423361904658629462}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -259,3 +260,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerColor
   ShowTopMostFoldoutHeaderGroup: 1
   capsuleRenderer: {fileID: 4204123432876496997}
+--- !u!114 &-1423361904658629462
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4115115058108080983}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1fc47d8c25e5ef46b1dadf66885530f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerPickupReceiver
+  ShowTopMostFoldoutHeaderGroup: 1

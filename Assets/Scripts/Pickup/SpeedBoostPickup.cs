@@ -11,15 +11,13 @@ public class SpeedBoostPickup : Pickup
         if (settings == null)
             return;
 
-        // Récupérer le système de déplacement du joueur.
-        PlayerMovement movement =
-            player.GetComponent<PlayerMovement>();
+        IPlayerEffectReceiver receiver =
+            player.GetComponent<IPlayerEffectReceiver>();
 
-        if (movement == null)
+        if (receiver == null)
             return;
 
-        // Appliquer le bonus de vitesse.
-        movement.ApplySpeedBoost(
+        receiver.ApplySpeedBoost(
             settings.speedBoostMultiplier,
             settings.speedBoostDuration
         );

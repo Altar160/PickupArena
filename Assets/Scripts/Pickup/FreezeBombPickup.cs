@@ -11,29 +11,27 @@ public class FreezeBombPickup : Pickup
         if (settings == null)
             return;
 
-        // Identifier le joueur qui a ramassé la bombe.
         ulong collectorId = player.OwnerClientId;
 
-        // Parcourir les joueurs connectés.
-        foreach (NetworkClient client in NetworkManager.ConnectedClientsList)
+        foreach (NetworkClient client
+            in NetworkManager.ConnectedClientsList)
         {
-            NetworkObject targetPlayer = client.PlayerObject;
+            NetworkObject target = client.PlayerObject;
 
-            if (targetPlayer == null)
+            if (target == null)
                 continue;
 
-            // Ne pas geler celui qui ramasse la bombe.
-            if (targetPlayer.OwnerClientId == collectorId)
+            // Ne pas geler celui qui ramasse.
+            if (target.OwnerClientId == collectorId)
                 continue;
 
-            PlayerMovement movement =
-                targetPlayer.GetComponent<PlayerMovement>();
+            IPlayerEffectReceiver receiver =
+                target.GetComponent<IPlayerEffectReceiver>();
 
-            if (movement == null)
+            if (receiver == null)
                 continue;
 
-            // Appliquer le gel aux autres joueurs.
-            movement.ApplyFreeze(settings.freezeDuration);
+            receiver.ApplyFreeze(settings.freezeDuration);
         }
     }
 }

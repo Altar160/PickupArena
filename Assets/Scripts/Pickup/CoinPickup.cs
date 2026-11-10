@@ -11,12 +11,12 @@ public class CoinPickup : Pickup
         if (settings == null)
             return;
 
-        PlayerScore playerScore =
-            player.GetComponent<PlayerScore>();
+        IPlayerEffectReceiver receiver =
+            player.GetComponent<IPlayerEffectReceiver>();
 
-        if (playerScore == null)
+        if (receiver == null)
             return;
 
-        playerScore.AddPoints(settings.coinPoints);
+        receiver.GivePoints(settings.coinPoints);
     }
 }

@@ -25,3 +25,6 @@ MonoBehaviour:
   rainbowSpeedBoostDuration: 5
   rainbowFreezeDuration: 2
   rainbowPickupChance: 0.1
+  coinPickupWeight: 70
+  speedBoostPickupWeight: 15
+  freezeBombPickupWeight: 15

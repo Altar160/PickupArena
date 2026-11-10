@@ -52,4 +52,14 @@ public class PickupArenaSettings : ScriptableObject
 
     [Range(0f, 1f)]
     public float rainbowPickupChance = 0.1f;
+
+    [Header("Normal Pickup Spawn Weights")]
+    [Min(0)]
+    public int coinPickupWeight = 75;
+
+    [Min(0)]
+    public int speedBoostPickupWeight = 15;
+
+    [Min(0)]
+    public int freezeBombPickupWeight = 10;
 }

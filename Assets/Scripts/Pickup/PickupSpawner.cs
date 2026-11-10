@@ -24,7 +24,6 @@ public class PickupSpawner : NetworkBehaviour
 
     private void Update()
     {
-        // Seul le serveur fait apparaître les pickups.
         if (!IsSpawned || !IsServer)
             return;
 
@@ -33,7 +32,6 @@ public class PickupSpawner : NetworkBehaviour
             GameManager.Instance.IsSpawned &&
             GameManager.Instance.State.Value == GamePhase.Playing;
 
-        // Supprimer les pickups quand la manche est terminée.
         if (!isPlaying)
         {
             if (wasPlaying)
@@ -43,7 +41,6 @@ public class PickupSpawner : NetworkBehaviour
             return;
         }
 
-        // Début de la manche.
         if (!wasPlaying)
         {
             wasPlaying = true;
@@ -59,7 +56,7 @@ public class PickupSpawner : NetworkBehaviour
         nextSpawnTime = Time.time +
             Mathf.Max(0.2f, settings.pickupSpawnInterval);
 
-        // Nettoyer les références des pickups ramassés.
+        // Retirer les références des pickups ramassés.
         activePickups.RemoveAll(
             pickup => pickup == null || !pickup.IsSpawned
         );
@@ -74,9 +71,9 @@ public class PickupSpawner : NetworkBehaviour
             pickupSpawnPoints.Length == 0)
             return;
 
-        // Rechercher les positions disponibles.
         List<Transform> availablePoints = new();
 
+        // Trouver les positions libres.
         foreach (Transform point in pickupSpawnPoints)
         {
             if (point == null)
@@ -104,36 +101,29 @@ public class PickupSpawner : NetworkBehaviour
         if (availablePoints.Count == 0)
             return;
 
-        // Choisir une position libre.
         Transform spawnPoint = availablePoints[
             Random.Range(0, availablePoints.Count)
         ];
 
-        // Choisir le type de pickup.
         NetworkObject selectedPrefab = GetRandomPickupPrefab();
 
         if (selectedPrefab == null)
             return;
 
-        // Créer le pickup.
         NetworkObject pickupInstance = Instantiate(
             selectedPrefab,
             spawnPoint.position,
             spawnPoint.rotation
         );
 
-        // Le pickup est synchronisé et détruit
-        // lors du déchargement de la scène.
         pickupInstance.Spawn(true);
 
         activePickups.Add(pickupInstance);
     }
 
-    // NOUVEAU : choisir entre un pickup normal
-    // et le RainbowPickup rare.
     private NetworkObject GetRandomPickupPrefab()
     {
-        // Vérifier si un RainbowPickup est déjà présent.
+        // Vérifier si un RainbowPickup est déjà actif.
         bool rainbowAlreadyActive = false;
 
         foreach (NetworkObject pickup in activePickups)
@@ -147,38 +137,82 @@ public class PickupSpawner : NetworkBehaviour
             }
         }
 
-        // Tenter de faire apparaître le RainbowPickup.
-        // Exemple : 0.1 = 10 % de chance.
+        // Tenter le RainbowPickup rare.
         if (!rainbowAlreadyActive &&
             rainbowPickupPrefab != null &&
-            settings != null &&
             Random.value < Mathf.Clamp01(
                 settings.rainbowPickupChance))
         {
-            Debug.Log("RainbowPickup rare sélectionné !");
-
             return rainbowPickupPrefab;
         }
 
-        // Sinon, choisir un pickup normal.
+        // Sinon, choisir un pickup normal
+        // selon les poids définis dans GameSettings.
+        return GetWeightedNormalPickup();
+    }
+
+    private NetworkObject GetWeightedNormalPickup()
+    {
         if (pickupPrefabs == null ||
             pickupPrefabs.Length == 0)
             return null;
 
         List<NetworkObject> validPrefabs = new();
+        List<int> weights = new();
+
+        int totalWeight = 0;
 
         foreach (NetworkObject prefab in pickupPrefabs)
         {
-            if (prefab != null)
-                validPrefabs.Add(prefab);
+            if (prefab == null)
+                continue;
+
+            int weight = GetPickupWeight(prefab);
+
+            // Un poids de 0 empêche son apparition.
+            if (weight <= 0)
+                continue;
+
+            validPrefabs.Add(prefab);
+            weights.Add(weight);
+
+            totalWeight += weight;
         }
 
-        if (validPrefabs.Count == 0)
+        if (totalWeight <= 0)
+        {
+            Debug.LogWarning(
+                "Aucun pickup normal avec un poids positif !"
+            );
             return null;
+        }
 
-        return validPrefabs[
-            Random.Range(0, validPrefabs.Count)
-        ];
+        // Tirage aléatoire pondéré.
+        int randomValue = Random.Range(0, totalWeight);
+
+        for (int i = 0; i < validPrefabs.Count; i++)
+        {
+            if (randomValue < weights[i])
+                return validPrefabs[i];
+
+            randomValue -= weights[i];
+        }
+
+        return validPrefabs[validPrefabs.Count - 1];
+    }
+
+    private int GetPickupWeight(NetworkObject prefab)
+    {
+        if (prefab.GetComponent<CoinPickup>() != null)
+            return Mathf.Max(0, settings.coinPickupWeight);
+
+        if (prefab.GetComponent<SpeedBoostPickup>() != null)
+            return Mathf.Max(0, settings.speedBoostPickupWeight);
+
+        if (prefab.GetComponent<FreezeBombPickup>() != null)
+            return Mathf.Max(0, settings.freezeBombPickupWeight);
+
+        return 0;
     }
 
     private void ClearPickups()

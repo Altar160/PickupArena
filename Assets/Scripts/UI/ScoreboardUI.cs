@@ -9,16 +9,17 @@ public class ScoreboardUI : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private TMP_Text scoresText;
 
-    // Joueurs actuellement présents.
     private readonly Dictionary<ulong, PlayerScore> players = new();
 
     private void OnEnable()
     {
-        // Écouter les apparitions et disparitions.
         PlayerScore.PlayerSpawned += RegisterPlayer;
         PlayerScore.PlayerDespawned += UnregisterPlayer;
 
-        // Retrouver les joueurs déjà apparus.
+        if (scoresText != null)
+            scoresText.richText = false;
+
+        // Retrouver les joueurs déjà présents.
         PlayerScore[] existingPlayers =
             FindObjectsByType<PlayerScore>(
                 FindObjectsSortMode.None
@@ -39,20 +40,23 @@ public class ScoreboardUI : MonoBehaviour
 
         ulong clientId = player.OwnerClientId;
 
-        // Éviter les inscriptions en double.
-        if (players.TryGetValue(clientId, out PlayerScore oldPlayer))
+        if (players.TryGetValue(
+            clientId, out PlayerScore oldPlayer))
         {
             if (oldPlayer == player)
                 return;
 
             if (oldPlayer != null)
+            {
                 oldPlayer.ScoreChanged -= OnScoreChanged;
+                oldPlayer.NicknameChanged -= OnNicknameChanged;
+            }
         }
 
         players[clientId] = player;
 
-        // Écouter les changements de score.
         player.ScoreChanged += OnScoreChanged;
+        player.NicknameChanged += OnNicknameChanged;
 
         RefreshUI();
     }
@@ -63,11 +67,13 @@ public class ScoreboardUI : MonoBehaviour
             return;
 
         player.ScoreChanged -= OnScoreChanged;
+        player.NicknameChanged -= OnNicknameChanged;
 
         ulong clientId = player.OwnerClientId;
 
-        if (players.TryGetValue(clientId, out PlayerScore current)
-            && current == player)
+        if (players.TryGetValue(
+            clientId, out PlayerScore current) &&
+            current == player)
         {
             players.Remove(clientId);
         }
@@ -76,6 +82,11 @@ public class ScoreboardUI : MonoBehaviour
     }
 
     private void OnScoreChanged(PlayerScore player)
+    {
+        RefreshUI();
+    }
+
+    private void OnNicknameChanged(PlayerScore player)
     {
         RefreshUI();
     }
@@ -92,11 +103,11 @@ public class ScoreboardUI : MonoBehaviour
             player => player == null || !player.IsSpawned
         );
 
-        // Classer les joueurs par score décroissant.
-        // En cas d'égalité, départager par identifiant.
+        // Trier par score décroissant.
         ranking.Sort((a, b) =>
         {
-            int result = b.Score.Value.CompareTo(a.Score.Value);
+            int result =
+                b.Score.Value.CompareTo(a.Score.Value);
 
             if (result != 0)
                 return result;
@@ -115,17 +126,30 @@ public class ScoreboardUI : MonoBehaviour
         {
             PlayerScore player = ranking[i];
 
-            string name = $"Joueur {player.OwnerClientId + 1}";
+            // Utiliser le vrai pseudo.
+            string nickname = player.Nickname.Value.ToString();
 
-            if (player.OwnerClientId == NetworkManager.ServerClientId)
-                name += " (Host)";
+            // Nom de secours si le pseudo n'est pas reçu.
+            if (string.IsNullOrWhiteSpace(nickname))
+            {
+                nickname =
+                    $"Joueur {player.OwnerClientId + 1}";
+            }
+
+            if (player.OwnerClientId ==
+                NetworkManager.ServerClientId)
+            {
+                nickname += " (Host)";
+            }
 
             if (manager != null &&
                 player.OwnerClientId == manager.LocalClientId)
-                name += " (vous)";
+            {
+                nickname += " (vous)";
+            }
 
             display.AppendLine(
-                $"{i + 1}. {name} : {player.Score.Value} pts"
+                $"{i + 1}. {nickname} : {player.Score.Value} pts"
             );
         }
 
@@ -140,7 +164,10 @@ public class ScoreboardUI : MonoBehaviour
         foreach (PlayerScore player in players.Values)
         {
             if (player != null)
+            {
                 player.ScoreChanged -= OnScoreChanged;
+                player.NicknameChanged -= OnNicknameChanged;
+            }
         }
 
         players.Clear();

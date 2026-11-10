@@ -1,9 +1,33 @@
+using System;
 using System.Text;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Unity.Netcode;
 using TMPro;
 using UnityEngine.UI;
+
+// Informations synchronisées d'un joueur du Lobby.
+public struct LobbyPlayerData :
+    INetworkSerializable, IEquatable<LobbyPlayerData>
+{
+    public ulong ClientId;
+    public FixedString64Bytes Nickname;
+
+    public void NetworkSerialize<T>(
+        BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref ClientId);
+        serializer.SerializeValue(ref Nickname);
+    }
+
+    public bool Equals(LobbyPlayerData other)
+    {
+        return ClientId == other.ClientId &&
+               Nickname.Equals(other.Nickname);
+    }
+}
 
 [RequireComponent(typeof(NetworkObject))]
 public class LobbyManager : NetworkBehaviour
@@ -16,29 +40,26 @@ public class LobbyManager : NetworkBehaviour
     [SerializeField] private int minPlayers = 2;
     [SerializeField] private int maxPlayers = 4;
 
-    // Liste synchronisée des joueurs.
-    private NetworkList<ulong> players;
+    private NetworkList<LobbyPlayerData> players;
 
     private void Awake()
     {
-        players = new NetworkList<ulong>();
+        players = new NetworkList<LobbyPlayerData>();
     }
 
     public override void OnNetworkSpawn()
     {
-        // Réagir aux modifications de la liste.
         players.OnListChanged += OnPlayersChanged;
 
         if (IsServer)
         {
-            // Écouter les connexions et déconnexions.
             NetworkManager.OnClientConnectedCallback +=
                 OnClientConnected;
 
             NetworkManager.OnClientDisconnectCallback +=
                 OnClientDisconnected;
 
-            // Ajouter les joueurs déjà connectés.
+            // Récupérer les joueurs déjà connectés.
             foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
             {
                 AddPlayer(clientId);
@@ -46,31 +67,39 @@ public class LobbyManager : NetworkBehaviour
         }
 
         if (startGameButton != null)
-        {
             startGameButton.onClick.AddListener(StartGame);
-        }
 
         RefreshUI();
     }
 
     private void OnClientConnected(ulong clientId)
     {
-        if (!IsServer) return;
-
-        AddPlayer(clientId);
+        if (IsServer)
+            AddPlayer(clientId);
     }
 
     private void AddPlayer(ulong clientId)
     {
         for (int i = 0; i < players.Count; i++)
         {
-            if (players[i] == clientId)
+            if (players[i].ClientId == clientId)
                 return;
         }
 
-        players.Add(clientId);
+        SessionConnectionApproval approval =
+            NetworkManager.GetComponent<SessionConnectionApproval>();
 
-        Debug.Log($"Joueur {clientId} rejoint le Lobby.");
+        string nickname = approval != null
+            ? approval.GetPlayerName(clientId)
+            : $"Joueur {clientId + 1}";
+
+        players.Add(new LobbyPlayerData
+        {
+            ClientId = clientId,
+            Nickname = new FixedString64Bytes(nickname)
+        });
+
+        Debug.Log($"{nickname} rejoint le Lobby.");
     }
 
     private void OnClientDisconnected(ulong clientId)
@@ -79,15 +108,13 @@ public class LobbyManager : NetworkBehaviour
 
         for (int i = players.Count - 1; i >= 0; i--)
         {
-            if (players[i] == clientId)
-            {
+            if (players[i].ClientId == clientId)
                 players.RemoveAt(i);
-            }
         }
     }
 
     private void OnPlayersChanged(
-        NetworkListEvent<ulong> changeEvent)
+        NetworkListEvent<LobbyPlayerData> changeEvent)
     {
         RefreshUI();
     }
@@ -96,38 +123,36 @@ public class LobbyManager : NetworkBehaviour
     {
         if (playersListText != null)
         {
-            StringBuilder text = new StringBuilder();
+            StringBuilder display = new StringBuilder();
 
-            text.AppendLine(
+            display.AppendLine(
                 $"Joueurs connectés : {players.Count}/{maxPlayers}"
             );
 
-            text.AppendLine();
+            display.AppendLine();
 
             for (int i = 0; i < players.Count; i++)
             {
-                ulong clientId = players[i];
+                LobbyPlayerData player = players[i];
 
-                text.Append($"Joueur {clientId + 1}");
+                display.Append(player.Nickname.ToString());
 
-                if (clientId == NetworkManager.ServerClientId)
-                    text.Append(" (Host)");
+                if (player.ClientId == NetworkManager.ServerClientId)
+                    display.Append(" (Host)");
 
-                if (clientId == NetworkManager.LocalClientId)
-                    text.Append(" (vous)");
+                if (player.ClientId == NetworkManager.LocalClientId)
+                    display.Append(" (vous)");
 
-                text.AppendLine();
+                display.AppendLine();
             }
 
-            playersListText.text = text.ToString();
+            playersListText.text = display.ToString();
         }
 
         if (startGameButton != null)
         {
-            // Seul le Host voit le bouton.
             startGameButton.gameObject.SetActive(IsHost);
 
-            // Il faut entre 2 et 4 joueurs.
             startGameButton.interactable =
                 IsHost &&
                 players.Count >= minPlayers &&
@@ -137,19 +162,13 @@ public class LobbyManager : NetworkBehaviour
 
     public void StartGame()
     {
-        // Sécurité : seul le Host peut démarrer.
-        if (!IsHost) return;
+        if (!IsHost)
+            return;
 
         if (players.Count < minPlayers ||
             players.Count > maxPlayers)
-        {
-            Debug.LogWarning(
-                "Nombre de joueurs incorrect."
-            );
             return;
-        }
 
-        // Charger GameScene chez tous les joueurs.
         SceneEventProgressStatus result =
             NetworkManager.SceneManager.LoadScene(
                 "GameScene",
@@ -159,7 +178,7 @@ public class LobbyManager : NetworkBehaviour
         if (result != SceneEventProgressStatus.Started)
         {
             Debug.LogError(
-                $"Impossible de lancer la partie : {result}"
+                $"Impossible de charger GameScene : {result}"
             );
         }
     }
@@ -178,9 +197,7 @@ public class LobbyManager : NetworkBehaviour
         }
 
         if (startGameButton != null)
-        {
             startGameButton.onClick.RemoveListener(StartGame);
-        }
     }
 
     private void OnDestroy()

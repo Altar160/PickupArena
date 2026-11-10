@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Text;
 using UnityEngine;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -7,86 +8,105 @@ using TMPro;
 
 public class MainMenuUI : MonoBehaviour
 {
+    [Header("Player Settings")]
+    [SerializeField] private TMP_InputField nicknameInput;
+
     [Header("Connection Settings")]
     [SerializeField] private TMP_InputField ipInput;
     [SerializeField] private TMP_InputField portInput;
 
-    // Créer une partie en tant que Host.
     public void HostGame()
     {
         NetworkManager manager = NetworkManager.Singleton;
 
-        if (!CanConnect(manager))
+        if (!CanConnect(manager) ||
+            !TryGetPort(out ushort port))
             return;
 
-        if (!TryGetPort(out ushort port))
-            return;
+        string nickname = GetNickname();
 
         UnityTransport transport =
             manager.GetComponent<UnityTransport>();
 
-        // Préparer l'adresse du serveur.
         transport.SetConnectionData(
             "127.0.0.1",
             port,
             "0.0.0.0"
         );
 
+        // Préparer les données du joueur.
+        manager.NetworkConfig.ConnectionData =
+            Encoding.UTF8.GetBytes(nickname);
+
         if (manager.StartHost())
         {
-            Debug.Log("Host démarré !");
+            // Conserver le pseudo du Host.
+            SessionConnectionApproval approval =
+                manager.GetComponent<SessionConnectionApproval>();
+
+            if (approval != null)
+                approval.SetHostName(nickname);
+
+            Debug.Log($"Host démarré : {nickname}");
+
             StartCoroutine(OpenLobby(manager));
         }
         else
         {
-            Debug.LogError("Échec du démarrage du Host.");
+            Debug.LogError("Impossible de démarrer le Host.");
         }
     }
 
-    // Rejoindre une partie en tant que Client.
     public void JoinGame()
     {
         NetworkManager manager = NetworkManager.Singleton;
 
-        if (!CanConnect(manager))
+        if (!CanConnect(manager) ||
+            !TryGetPort(out ushort port))
             return;
 
-        if (!TryGetPort(out ushort port))
-            return;
-
-        if (ipInput == null)
+        if (ipInput == null ||
+            string.IsNullOrWhiteSpace(ipInput.text))
         {
-            Debug.LogError("Champ IP non assigné !");
+            Debug.LogWarning("Adresse IP manquante !");
             return;
         }
 
+        string nickname = GetNickname();
         string ip = ipInput.text.Trim();
-
-        if (string.IsNullOrWhiteSpace(ip))
-        {
-            Debug.LogWarning("Entre une adresse IP !");
-            return;
-        }
 
         UnityTransport transport =
             manager.GetComponent<UnityTransport>();
 
-        // Configurer l'adresse du Host.
         transport.SetConnectionData(ip, port);
+
+        // Envoyer le pseudo au serveur lors de la connexion.
+        manager.NetworkConfig.ConnectionData =
+            Encoding.UTF8.GetBytes(nickname);
 
         if (manager.StartClient())
         {
             Debug.Log(
-                $"Connexion demandée à {ip}:{port}"
+                $"{nickname} tente de rejoindre {ip}:{port}"
             );
         }
         else
         {
-            Debug.LogError("Impossible de démarrer le Client.");
+            Debug.LogError("Connexion impossible.");
         }
     }
 
-    // Le serveur charge le Lobby pour la session.
+    private string GetNickname()
+    {
+        string nickname = nicknameInput != null
+            ? nicknameInput.text
+            : "";
+
+        return SessionConnectionApproval.CleanNickname(
+            nickname
+        );
+    }
+
     private IEnumerator OpenLobby(NetworkManager manager)
     {
         yield return null;
@@ -103,7 +123,7 @@ public class MainMenuUI : MonoBehaviour
         if (result != SceneEventProgressStatus.Started)
         {
             Debug.LogError(
-                $"Impossible de charger le Lobby : {result}"
+                $"Chargement Lobby impossible : {result}"
             );
         }
     }
@@ -124,7 +144,7 @@ public class MainMenuUI : MonoBehaviour
 
         if (manager.IsListening)
         {
-            Debug.LogWarning("Session déjà démarrée !");
+            Debug.LogWarning("Session déjà démarrée.");
             return false;
         }
 
@@ -144,5 +164,18 @@ public class MainMenuUI : MonoBehaviour
         }
 
         return true;
+    }
+
+    public void QuitGame()
+    {
+        Debug.Log("Fermeture du jeu...");
+
+#if UNITY_EDITOR
+        // Dans Unity Editor : arrêter le Play Mode.
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+    // Dans le jeu compilé : fermer l'application.
+    Application.Quit();
+#endif
     }
 }

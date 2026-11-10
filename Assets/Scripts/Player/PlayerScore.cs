@@ -1,19 +1,18 @@
-
 using System;
 using UnityEngine;
 using Unity.Netcode;
+using Unity.Collections;
 
 public class PlayerScore : NetworkBehaviour
 {
-    // Événements permettant de suivre les joueurs.
+    // Événements pour l'interface.
     public static event Action<PlayerScore> PlayerSpawned;
     public static event Action<PlayerScore> PlayerDespawned;
 
-    // Événement déclenché lorsque le score change.
     public event Action<PlayerScore> ScoreChanged;
+    public event Action<PlayerScore> NicknameChanged;
 
-    // Score synchronisé, modifiable uniquement
-    // par le serveur.
+    // Score synchronisé entre tous les joueurs.
     public readonly NetworkVariable<int> Score =
         new NetworkVariable<int>(
             0,
@@ -21,17 +20,40 @@ public class PlayerScore : NetworkBehaviour
             NetworkVariableWritePermission.Server
         );
 
+    // Pseudo synchronisé entre tous les joueurs.
+    public readonly NetworkVariable<FixedString64Bytes> Nickname =
+        new NetworkVariable<FixedString64Bytes>(
+            default,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
     public override void OnNetworkSpawn()
     {
         Score.OnValueChanged += OnScoreChanged;
+        Nickname.OnValueChanged += OnNicknameChanged;
 
-        // Prévenir les systèmes intéressés.
+        // Seul le serveur attribue les pseudos.
+        if (IsServer)
+        {
+            SessionConnectionApproval approval =
+                NetworkManager.GetComponent<
+                    SessionConnectionApproval>();
+
+            string playerName = approval != null
+                ? approval.GetPlayerName(OwnerClientId)
+                : $"Joueur {OwnerClientId + 1}";
+
+            Nickname.Value =
+                new FixedString64Bytes(playerName);
+        }
+
+        // Informer les interfaces de l'apparition.
         PlayerSpawned?.Invoke(this);
     }
 
     public void AddPoints(int points)
     {
-        // Seul le serveur attribue les points.
         if (!IsSpawned || !IsServer || points <= 0)
             return;
 
@@ -40,7 +62,6 @@ public class PlayerScore : NetworkBehaviour
 
     public void ResetScore()
     {
-        // Utile pour relancer une manche plus tard.
         if (!IsSpawned || !IsServer)
             return;
 
@@ -50,12 +71,18 @@ public class PlayerScore : NetworkBehaviour
     private void OnScoreChanged(int oldScore, int newScore)
     {
         Debug.Log(
-            $"Joueur {OwnerClientId} : " +
-            $"{oldScore} -> {newScore} points"
+            $"{Nickname.Value} : {oldScore} -> {newScore} points"
         );
 
-        // Prévenir l'interface du changement.
         ScoreChanged?.Invoke(this);
+    }
+
+    private void OnNicknameChanged(
+        FixedString64Bytes oldName,
+        FixedString64Bytes newName)
+    {
+        // Informer l'interface du changement de pseudo.
+        NicknameChanged?.Invoke(this);
     }
 
     public override void OnNetworkDespawn()
@@ -63,5 +90,6 @@ public class PlayerScore : NetworkBehaviour
         PlayerDespawned?.Invoke(this);
 
         Score.OnValueChanged -= OnScoreChanged;
+        Nickname.OnValueChanged -= OnNicknameChanged;
     }
 }

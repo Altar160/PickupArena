@@ -20,7 +20,6 @@ public class PlayerMovement : NetworkBehaviour
     // Freeze Bomb
     private float freezeEndTime = 0f;
 
-    // État de gel synchronisé entre les joueurs.
     public readonly NetworkVariable<bool> IsFrozen =
         new NetworkVariable<bool>(
             false,
@@ -48,19 +47,15 @@ public class PlayerMovement : NetworkBehaviour
 
         Vector2 input = Vector2.zero;
 
-        // Avancer
         if (keyboard.zKey.isPressed || keyboard.wKey.isPressed)
             input.y += 1f;
 
-        // Reculer
         if (keyboard.sKey.isPressed)
             input.y -= 1f;
 
-        // Gauche
         if (keyboard.qKey.isPressed || keyboard.aKey.isPressed)
             input.x -= 1f;
 
-        // Droite
         if (keyboard.dKey.isPressed)
             input.x += 1f;
 
@@ -81,29 +76,34 @@ public class PlayerMovement : NetworkBehaviour
 
     private void FixedUpdate()
     {
-        // Seul le serveur contrôle le déplacement.
+        // Seul le serveur contrôle les déplacements.
         if (!IsSpawned || !IsServer) return;
 
-        // Fin du Speed Boost
+        // Vérifier la fin du Speed Boost.
         if (currentSpeedMultiplier > 1f &&
             Time.time >= speedBoostEndTime)
         {
             currentSpeedMultiplier = 1f;
             speedBoostEndTime = 0f;
-
-            Debug.Log(
-                $"Speed Boost terminé pour {OwnerClientId}"
-            );
         }
 
-        // Fin du gel
+        // Vérifier la fin du Freeze.
         if (IsFrozen.Value && Time.time >= freezeEndTime)
         {
             IsFrozen.Value = false;
             freezeEndTime = 0f;
         }
 
-        // Un joueur gelé ne peut pas se déplacer.
+        // IMPORTANT :
+        // Aucun déplacement en dehors de Playing.
+        if (GameManager.Instance == null ||
+            !GameManager.Instance.IsSpawned ||
+            GameManager.Instance.State.Value != GamePhase.Playing)
+        {
+            return;
+        }
+
+        // Un joueur gelé ne peut pas bouger.
         if (IsFrozen.Value)
             return;
 
@@ -121,7 +121,6 @@ public class PlayerMovement : NetworkBehaviour
         );
     }
 
-    // Appliquer le Speed Boost.
     public void ApplySpeedBoost(float multiplier, float duration)
     {
         if (!IsSpawned || !IsServer) return;
@@ -129,41 +128,27 @@ public class PlayerMovement : NetworkBehaviour
 
         currentSpeedMultiplier = multiplier;
         speedBoostEndTime = Time.time + duration;
-
-        Debug.Log(
-            $"Joueur {OwnerClientId} : Speed Boost x{multiplier}"
-        );
     }
 
-    // Appliquer le gel.
     public void ApplyFreeze(float duration)
     {
         if (!IsSpawned || !IsServer) return;
         if (duration <= 0f) return;
 
-        // Un nouveau gel prolonge l'effet si nécessaire.
         freezeEndTime = Mathf.Max(
             freezeEndTime,
             Time.time + duration
         );
 
         IsFrozen.Value = true;
-
-        Debug.Log(
-            $"Joueur {OwnerClientId} gelé pendant {duration} secondes"
-        );
     }
 
     private void OnFreezeChanged(bool oldValue, bool newValue)
     {
         if (newValue)
-        {
-            Debug.Log($"Joueur {OwnerClientId} est gelé !");
-        }
+            Debug.Log($"Joueur {OwnerClientId} gelé !");
         else
-        {
-            Debug.Log($"Joueur {OwnerClientId} est libéré !");
-        }
+            Debug.Log($"Joueur {OwnerClientId} libéré !");
     }
 
     public override void OnNetworkDespawn()

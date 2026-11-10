@@ -1059,6 +1059,7 @@ GameObject:
   - component: {fileID: 1595622574}
   - component: {fileID: 1595622573}
   - component: {fileID: 1595622575}
+  - component: {fileID: 1595622576}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -1123,6 +1124,25 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   countdownDuration: 3
   matchDuration: 90
+--- !u!114 &1595622576
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1595622572}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc72d75fff61d0144a175b16a6306e02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameSceneSpawnManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  playerPrefab: {fileID: 6099944717330746727, guid: dbf4512eb0a588a4faa24ab3f30e28dc, type: 3}
+  spawnPoints:
+  - {fileID: 611043017}
+  - {fileID: 445585240}
+  - {fileID: 359291888}
+  - {fileID: 418679634}
 --- !u!1 &1748538072
 GameObject:
   m_ObjectHideFlags: 0
